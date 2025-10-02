@@ -1,0 +1,4 @@
+cloudscraper>=1.2.60
+PyYAML>=6.0
+pyperclip>=1.8.2
+win10toast>=0.9
