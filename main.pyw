@@ -3,7 +3,6 @@ import re
 import sys
 import time
 import cloudscraper
-import ctypes
 import pyperclip
 import yaml
 from datetime import datetime
