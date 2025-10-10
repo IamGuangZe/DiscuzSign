@@ -6,7 +6,8 @@ import cloudscraper
 import pyperclip
 import yaml
 from datetime import datetime
-from win10toast import ToastNotifier
+from winotify import Notification, audio
+import pyperclip
 
 LOG_FILE = "logs.txt"
 LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
@@ -30,9 +31,16 @@ def send_notification(title, msg, copy_to_clipboard=False):
         except Exception:
             msg += "\n\n⚠️ 无法复制到剪贴板"
     try:
-        ToastNotifier().show_toast(title, msg, duration=10, threaded=True)
-    except Exception:
-        pass
+        toast = Notification(
+            app_id="Discuz AutoSign",
+            title=title,
+            msg=msg,
+            duration="short"  # "short" 或 "long"
+        )
+        toast.set_audio(audio.Default, loop=False)
+        toast.show()
+    except Exception as e:
+        log(f"通知失败: {e}", level="ERROR")
     log(f"{title}: {msg}", level="INFO")
 
 def load_config(config_path):
@@ -104,7 +112,6 @@ def fetch_formhash(base_url, cookies, headers, timeout):
     raise ValueError("未找到 formhash，请检查登录状态或网页结构。")
 
 def fetch_continuous_days(base_url, cookies, headers, timeout):
-    """访问签到页获取连续签到天数"""
     scraper = cloudscraper.create_scraper()
     sign_page = f"{base_url}/k_misign-sign.html"
     try:
