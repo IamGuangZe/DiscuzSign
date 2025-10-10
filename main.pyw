@@ -195,14 +195,19 @@ def main():
         sys.exit()
 
     results = []
+    has_error = False
+
     for cookie_str in cookie_list:
         result = sign_account(base_url, cookie_str, timeout)
         results.append(result)
+        if "失败" in result or "错误" in result:
+            has_error = True
         if options.get("rotate_accounts", True):
             time.sleep(2)
 
     final_msg = "\n".join(f"{idx+1}. {res}" for idx, res in enumerate(results))
-    send_notification("✅ 签到完成", final_msg)
+    title = "✅ 签到完成" if not has_error else "⚠️ 签到异常"
+    send_notification(title, final_msg)
 
 if __name__ == "__main__":
     main()
