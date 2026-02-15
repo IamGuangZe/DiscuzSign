@@ -1,9 +1,9 @@
-# DiscuzAutoSign
+# DiscuzSign
 
 **标注**：此项目包含 AI 生成的代码  
 
 ## 关于这个项目
-DiscuzAutoSign 用于在一些使用了 [k_misign](https://addon.dismall.com/plugins/k_misign.html) 插件的 Discuz 论坛上自动签到。  
+DiscuzSign 用于在一些使用了 [k_misign](https://addon.dismall.com/plugins/k_misign.html) 插件的 Discuz 论坛上签到。  
 
 ## 使用方法
 1. 第一次运行本程序时，会自动生成 `config.yaml` 文件。  
