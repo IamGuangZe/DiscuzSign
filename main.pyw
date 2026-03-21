@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import time
-import random  # 新增：用于生成随机延迟
+import random
 import cloudscraper
 import pyperclip
 import yaml
@@ -11,7 +11,6 @@ from winotify import Notification, audio
 
 LOG_FILE = "logs.txt"
 LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
-
 
 def log(msg, level="INFO"):
     if level not in LOG_LEVELS:
@@ -24,7 +23,6 @@ def log(msg, level="INFO"):
             f.write(line + "\n")
     except Exception:
         pass
-
 
 def send_notification(title, msg, copy_to_clipboard=False):
     if copy_to_clipboard:
@@ -45,7 +43,6 @@ def send_notification(title, msg, copy_to_clipboard=False):
         log(f"通知失败: {e}", level="ERROR")
     log(f"{title}: {msg}", level="INFO")
 
-
 def load_config(config_path):
     if not os.path.exists(config_path):
         with open(config_path, "w", encoding="utf-8") as f:
@@ -58,9 +55,9 @@ def load_config(config_path):
                 "options:\n"
                 "  rotate_accounts: true\n"
                 "  timeout: 15\n"
-                "  delay_range: [1, 5]  # 签到前的随机延迟范围(秒)\n"
-                "  retry_times: 3       # 失败重试次数\n"
-                "  retry_interval: 10   # 重试间隔(秒)\n"
+                "  delay_range: [1, 5]\n"
+                "  retry_times: 3\n"
+                "  retry_interval: 10\n"
             )
         log("未找到 config.yaml，已创建模板，请填写后重试。", level="FATAL")
         raise FileNotFoundError("未找到 config.yaml，已创建模板，请填写后重试。")
@@ -76,16 +73,7 @@ def load_config(config_path):
     retry_times = options.get("retry_times", 1)
     retry_interval = options.get("retry_interval", 5)
 
-    if not base_url:
-        log("site.url 为空，请检查配置", level="FATAL")
-        raise ValueError("config.yaml 中 site.url 为空，请填写后重试。")
-    if not cookie_list:
-        log("auth.cookies 为空，请检查配置", level="FATAL")
-        raise ValueError("config.yaml 中 auth.cookies 为空，请填写至少一个 cookie。")
-
-    log(f"配置加载成功: {len(cookie_list)} 个账号，论坛地址 {base_url}", level="INFO")
     return base_url, cookie_list, options, timeout, delay_range, retry_times, retry_interval
-
 
 def parse_cookie(cookie_str):
     cookies = {}
@@ -96,29 +84,29 @@ def parse_cookie(cookie_str):
                 cookies[parts[0].strip()] = parts[1].strip()
     return cookies
 
-
 def fetch_formhash(base_url, cookies, headers, timeout):
-    scraper = cloudscraper.create_scraper()
-    resp = scraper.get(base_url, headers=headers, cookies=cookies, timeout=timeout)
-    html = resp.text
-    patterns = [r"formhash=([a-zA-Z0-9]+)", r'name="formhash"\s+value="([a-zA-Z0-9]+)"']
-    for pattern in patterns:
-        m = re.search(pattern, html)
-        if m:
-            return m.group(1)
+    try:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(base_url, headers=headers, cookies=cookies, timeout=timeout)
+        html = resp.text
+        patterns = [r"formhash=([a-zA-Z0-9]+)", r'name="formhash"\s+value="([a-zA-Z0-9]+)"']
+        for pattern in patterns:
+            m = re.search(pattern, html)
+            if m:
+                return m.group(1)
+    except Exception as e:
+        log(f"获取 formhash 过程中出现网络错误: {e}", level="WARN")
     return None
 
-
 def fetch_continuous_days(base_url, cookies, headers, timeout):
-    scraper = cloudscraper.create_scraper()
-    sign_page = f"{base_url}/k_misign-sign.html"
     try:
+        scraper = cloudscraper.create_scraper()
+        sign_page = f"{base_url}/k_misign-sign.html"
         resp = scraper.get(sign_page, headers=headers, cookies=cookies, timeout=timeout)
         m = re.search(r'<input type="hidden" class="hidnum" id="lxdays" value="(\d+)">', resp.text)
         return m.group(1) if m else None
     except:
         return None
-
 
 def sign_account(base_url, cookie_str, timeout):
     cookies = parse_cookie(cookie_str)
@@ -130,27 +118,29 @@ def sign_account(base_url, cookie_str, timeout):
 
     formhash = fetch_formhash(base_url, cookies, headers, timeout)
     if not formhash:
-        return "失败：未找到 formhash"
+        return "失败：获取 formhash 异常（网络或登录失效）"
 
     url = f"{base_url}/k_misign-sign.html?operation=qiandao&format=button&formhash={formhash}"
-    scraper = cloudscraper.create_scraper()
-    resp = scraper.get(url, headers=headers, cookies=cookies, timeout=timeout)
-    text = resp.text.strip()
+    try:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(url, headers=headers, cookies=cookies, timeout=timeout)
+        text = resp.text.strip()
 
-    if "今日已签" in text:
-        msg = "今日已签，明日再来~"
-    elif "签到成功" in text or "已签到" in text:
-        m = re.search(r"获得随机奖励\s*(.*?)。", text)
-        reward = m.group(1) if m else "成功"
-        msg = f"签到成功，奖励：{reward}"
-    else:
-        return f"失败：未知响应 {text[:20]}"
+        if "今日已签" in text:
+            msg = "今日已签，明日再来~"
+        elif "签到成功" in text or "已签到" in text:
+            m = re.search(r"获得随机奖励\s*(.*?)。", text)
+            reward = m.group(1) if m else "成功"
+            msg = f"签到成功，奖励：{reward}"
+        else:
+            return f"失败：服务器返回异常内容"
 
-    days = fetch_continuous_days(base_url, cookies, headers, timeout)
-    if days:
-        msg += f" | 连续: {days}天"
-    return msg
-
+        days = fetch_continuous_days(base_url, cookies, headers, timeout)
+        if days:
+            msg += f" | 连续: {days}天"
+        return msg
+    except Exception as e:
+        return f"失败：请求过程中发生网络异常 {type(e).__name__}"
 
 def main():
     try:
@@ -174,12 +164,13 @@ def main():
         res = ""
         for i in range(retry_times):
             res = sign_account(base_url, cookie_str, timeout)
-            if "失败" not in res and "错误" not in res:
+            if "失败" not in res:
                 success = True
                 break
             else:
                 log(f"账号 {idx + 1} 第 {i + 1} 次尝试失败: {res}，{retry_interval}秒后重试...", level="WARN")
-                time.sleep(retry_interval)
+                if i < retry_times - 1:
+                    time.sleep(retry_interval)
 
         results.append(res)
         if not success:
@@ -191,7 +182,6 @@ def main():
     final_msg = "\n".join(f"{idx + 1}. {res}" for idx, res in enumerate(results))
     title = "✅ 签到完成" if not has_error else "⚠️ 签到异常"
     send_notification(title, final_msg)
-
 
 if __name__ == "__main__":
     main()
